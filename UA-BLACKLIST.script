@@ -1,0 +1,209 @@
+# Copyright © 2021 Vadym Klymenko <vadim@explorer.od.ua>
+# License: http://opensource.org/licenses/MIT
+#
+# UA-BLACKLIST v2.1
+#
+
+# You should have VPN connection named:
+#
+:local VPNgw "pptp-bypass";
+:local VPNReconnect false;
+#
+# Also, You should have:
+# - NAT rule for this interface
+# - Set DNS to use ONLY Google DNS servers. Not Use ISP DNS'es
+
+#
+# URL where to get blocked subnets list
+#
+:local apiURL "https://uablacklist.net/"
+:local apiFilePrefix "subnets_mikrotik_"
+:local apiFileSuffix ".txt"
+
+#TODO:
+# Summary totals info
+
+######### Nothing interesting below this line ##############
+:local listName "UABL"
+:local totalActive 0
+:local totalAdded 0
+:local totalDeleted 0
+:local totalIgnored 0
+:local apipiece 0
+:local isEnd false
+:local message
+:set message "$listName: Starting..."
+/log info ($message)
+:put $message
+:if ($VPNReconnect) do={
+:set message "$listName: VPN Reconnection set in config."
+/log info ($message)
+:put $message
+   /interface disable $VPNgw;
+   :delay 1;
+   /interface enable $VPNgw;
+   :delay 10;
+};
+:set message "$listName: UA-BLACKLIST registry API URL set to: $apiURL"
+/log info ($message)
+:put $message
+:do {
+    :local fileName "$apiFilePrefix$apipiece$apiFileSuffix"
+    :local apiPath "$apiURL$fileName"
+    :local fetchData
+    :local fetchResult ""
+    :local fetchStatus ""
+    :local content ""
+    :local contentLen 0
+    :local newRouteList [:toarray ""]
+    :local newRouteListCount 0
+    :local routesActive 0
+    :local routesAdded 0
+    :local routesDeleted 0
+    :local routesIgnored 0
+    :local lineEnd 0
+    :local line ""
+    :local lastEnd 0
+    :local company ""
+    #
+    # Fetching file
+    #
+    :do {
+        :set message "$listName: trying to fetch $apiPath"
+        /log debug ($message)
+        :put $message
+        :set fetchData [/tool fetch mode=https output=user url=$apiPath as-value]
+        :set fetchResult [:toarray $fetchData]
+        :set content ($fetchResult->"data")
+        :set contentLen [:len $content]
+        :set fetchStatus ($fetchResult->"status")
+        if ($fetchStatus != "finished") do={
+            :set message "$listName: API connection error." 
+            /log error ($message)
+            :put $message
+            :set isEnd true
+        } else={
+            :set message "$listName: $apiPath successfully downloaded" 
+            /log debug ($message)
+            :put $message
+        }
+    } on-error={
+        if ($apipiece = 0) do={
+            :set message "$listName: API connection error." 
+            /log error ($message)
+            :put $message
+            :set isEnd true
+        } else={
+            :set message "$listName: No more pieces to fetch. Finished." 
+            /log info ($message)
+            :put $message
+            :set isEnd true
+        }
+    }
+    if (!$isEnd) do={
+        #
+        # Getting array of new addresses from downloaded file
+        #
+        :set message "$listName: Importing new addresss list..."
+        /log debug ($message)
+        :put $message
+        :while ($lastEnd < $contentLen) do {
+            :set lineEnd [:find $content "\n" $lastEnd]
+            :set line [:pick $content $lastEnd $lineEnd]
+            :set lastEnd ($lineEnd+1)
+            :local entry [:pick $line 0 ($lineEnd-1)]
+            :if ([:pick $line 0 1] != "#") do={
+                :if ([:len $entry] > 0) do={
+                    set newRouteList ($newRouteList, $line) 
+                    set newRouteListCount ($activeRouteCount +1)
+                }
+            } else={
+                :set company [:pick $line 2 ($lineEnd)]
+            }
+        }
+        #
+        # Getting array of active routes
+        #
+        :set message "$listName: Importing active address list..."
+        /log debug ($message)
+        :put $message
+        :local activeRouteList [:toarray ""]
+        :local activeRouteCount 0
+        :foreach activeRouteItem in=[/ip route find comment="$listName: $apipiece $company"] do={
+            set activeRouteList ($activeRouteList, [/ip route get $activeRouteItem dst-address]) 
+            set activeRouteCount ($activeRouteCount +1)
+        }
+        #
+        # God of debugging need more debugging!
+        #
+        # :set message "$activeRouteList"
+        # /log debug ($message)
+        # :put $message
+        # :set message "$newRouteList"
+        # /log debug ($message)
+        # :put $message
+
+        #
+        # Deleting outdated routes
+        #
+        :foreach arli in=$activeRouteList do {
+            set routesActive ($routesActive +1)
+            :local exist false
+            :foreach nrli in=$newRouteList do={
+                if ($arli = $nrli) do={
+                    set exist true
+                }
+            }
+            if (!$exist) do={
+                :set message "$listName: Outdated rule for $arli. Removing"
+                /log debug ($message)
+                :put $message
+                /ip route remove [/ip route find dst-address=$arli comment="$listName $apipiece $company"]
+                :set routesDeleted ($routesDeleted + 1)
+            }
+        }
+        #
+        # Adding new routes
+        #
+        :foreach nrli in=$newRouteList do {
+            :local exist false
+            :foreach arli in=$activeRouteList do={
+                if ($arli = $nrli) do={
+                    set exist true
+                }
+            }
+            if (!$exist) do={
+                :local existGlobal false
+                :foreach activeRouteItem in=[/ip route find comment~"$listName"] do={
+                    if ([/ip route get $activeRouteItem dst-address] = $nrli) do={
+                         set existGlobal true
+                    }
+                }
+                if (!$existGlobal) do={
+                    :set message "$listName: New rule found for $nrli"
+                    :put $message
+                    /log warning ($message)
+                    /ip route add dst-address=$nrli gateway=$VPNgw comment="$listName: $apipiece $company" check-gateway=ping
+                    :set routesAdded ($routesAdded + 1)
+                } else={
+                    :set routesIgnored ($routesIgnored + 1)
+                    :set message "$listName: Rule allready exist for $nrli. Ignored"
+                    :put $message
+                    /log warning ($message)
+                }
+            }
+        }
+        :set totalActive ($totalActive + $routesActive)
+        :set totalDeleted ($totalDeleted + $routesDeleted)
+        :set totalAdded ($totalAdded + $routesAdded)
+        :set totalIgnored ($totalIgnored + $routesIgnored)
+        :set message "$listName: Piece $apipiece: $routesActive active, $routesDeleted deleted, $routesAdded added, $routesIgnored ignored."
+        /log debug ($message)
+        :put $message
+    }
+    :set apipiece (apipiece+1)
+} while (!$isEnd)
+:local processed (apipiece)
+:set message "$listName: Finished. $processed files processed: $totalActive active, $totalDeleted deleted, $totalAdded added, $totalIgnored ignored."
+/log info ($message)
+:put $message
