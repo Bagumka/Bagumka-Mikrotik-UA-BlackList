@@ -4,14 +4,11 @@
 # UA-BLACKLIST v2.1
 #
 
-# You should have VPN connection named:
+#
+# VPN connection name:
 #
 :local VPNgw "pptp-bypass";
 :local VPNReconnect false;
-#
-# Also, You should have:
-# - NAT rule for this interface
-# - Set DNS to use ONLY Google DNS servers. Not Use ISP DNS'es
 
 #
 # URL where to get blocked subnets list
@@ -19,9 +16,6 @@
 :local apiURL "https://uablacklist.net/"
 :local apiFilePrefix "subnets_mikrotik_"
 :local apiFileSuffix ".txt"
-
-#TODO:
-# Summary totals info
 
 ######### Nothing interesting below this line ##############
 :local listName "UABL"
