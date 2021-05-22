@@ -2,7 +2,7 @@
 
 To redirect traffic to blocked adresses to VPN connection you should write it name to variable VPNgw.
 
-:local VPNgw "pptp-bypass";
+ :local VPNgw "pptp-bypass";
 
 Also, You should have:
  - NAT rule for this interface
@@ -10,4 +10,4 @@ Also, You should have:
 
 If you want to restart VPN on ecript run, set VPNReconnect variable to 'true'.
 
-:local VPNReconnect true;
+ :local VPNReconnect true;
