@@ -1,7 +1,7 @@
 # Copyright © 2021 Vadym Klymenko <vadim@explorer.od.ua>
 # License: https://github.com/Bagumka/Mikrotik-UA-BlackList/blob/main/LICENSE
 #
-# UA-BLACKLIST v2.2
+# UA-BLACKLIST v2.1
 #
 
 #
@@ -40,7 +40,7 @@
    /interface enable $blackholeGw;
    :delay 10;
 };
-:set message "$listName: UA-BLACKLIST registry API URL set to: $apiURL"
+:set message "$listName: UA-BLACKLIST registry API URL set to: $apiURL mode: $blackholeMode"
 /log info ($message)
 :put $message
 :do {
@@ -155,7 +155,7 @@
             set addressesActive ($addressesActive +1)
             :local exist false
             :foreach nrli in=$newAddressList do={
-                if ([find $arli "/"] <8) do={
+                if ([find $arli "/"] <7) do={
                      :set $arli ("$arli/32")
                 }
                 if ($arli = $nrli) do={
@@ -170,6 +170,10 @@
                     /ip route remove [/ip route find dst-address=$arli comment="$listName $apiPiece $company"]
                 } 
                 if ($blackholeMode = "firewall") do={
+                    :local hostMaskLocation [find $arli "/32"]
+                    if ( $hostMaskLocation >=7 ) do={
+                        :set $arli [:pick $arli 0 $hostMaskLocation] 
+                    }
                     /ip firewall address-list remove [/ip firewall address-list find list=$listName address=$arli comment="$apiPiece $company"]
                 }
                 :set addressesDeleted ($addressesDeleted + 1)
@@ -181,7 +185,7 @@
         :foreach nrli in=$newAddressList do {
             :local exist false
             :foreach arli in=$activeAddressList do={
-                if ([find $arli "/"] <8) do={
+                if ([find $arli "/"] <7) do={
                      :set $arli ("$arli/32")
                 }
                 if ($arli = $nrli) do={
@@ -200,7 +204,7 @@
                 if ($blackholeMode = "firewall") do={
                     :foreach activeAddressItem in=[/ip firewall address-list find list="$listName"] do={
                         :local ip [/ip firewall address-list get $activeAddressItem address]
-                        if ([find $ip "/"] <8) do={
+                        if ([find $ip "/"] <7) do={
                             :set $ip ("$ip/32")
                         }
                         if ($ip = $nrli) do={
