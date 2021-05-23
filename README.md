@@ -7,6 +7,9 @@ Additions:
  - Optimized for less disk operations and more memory operation (save our flash lifetime).
  - Intellectual rule processing. Do not touch unchangeable rules.
  - Interface workaround
+ - different modes available: 
+   - "route" create rules in routing table
+   - "firewall" create rules in firewall address list table
 
 To redirect traffic to blocked adresses to some interface you should write it name to variable blackholeGw.
 
@@ -19,3 +22,7 @@ Also, You should have:
 If you want to restart interface on script run, set blackholeGwReconnect variable to 'true'.
 
     :local blackholeGwReconnect true;
+
+Mode selection. "route" and "firewall"
+
+    :local blackholeMode "firewall"
