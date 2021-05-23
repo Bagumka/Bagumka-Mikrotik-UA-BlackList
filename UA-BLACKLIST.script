@@ -1,7 +1,7 @@
 # Copyright © 2021 Vadym Klymenko <vadim@explorer.od.ua>
 # License: https://github.com/Bagumka/Mikrotik-UA-BlackList/blob/main/LICENSE
 #
-# UA-BLACKLIST v2.1
+# UA-BLACKLIST v2.2
 #
 
 #
@@ -141,12 +141,12 @@
         # 
         # God of debugging need more debugging!
         #
-        :set message "$activeAddressList"
-        /log debug ($message)
-        :put $message
-        :set message "$newAddressList"
-        /log debug ($message)
-        :put $message
+        # :set message "$activeAddressList"
+        # /log debug ($message)
+        # :put $message
+        # :set message "$newAddressList"
+        # /log debug ($message)
+        # :put $message
 
         #
         # Deleting outdated rules
