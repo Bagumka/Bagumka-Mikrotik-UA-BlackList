@@ -13,7 +13,7 @@ Additions:
 
 To redirect traffic to blocked adresses to some interface you should write it name to variable blackholeGw.
 
-     :local blackholeGw "ether4";
+    :local blackholeGw "ether4";
 
 Also, You should have:
  - NAT rule for this interface
