@@ -2,6 +2,12 @@
 
 Based on https://gist.github.com/uablacklist and https://uablacklist.net/ service.
 
+Additions:
+ - More informative logging, debugging and statistics.
+ - Optimized for less disk operations and more memory operation (save our flash lifetime).
+ - Intellectual rule processing. Do not touch unchangeable rules.
+ - Interface workaround
+
 To redirect traffic to blocked adresses to some interface you should write it name to variable blackholeGw.
 
      :local blackholeGw "ether4";
