@@ -1,7 +1,7 @@
 # Copyright © 2021 Vadym Klymenko <vadim@explorer.od.ua>
 # License: https://github.com/Bagumka/Mikrotik-UA-BlackList/blob/main/LICENSE
 #
-# UA-BLACKLIST v2.1
+# UA-BLACKLIST v2.2
 #
 
 #
@@ -9,6 +9,8 @@
 #
 :local blackholeGw "pptp-bypass";
 :local blackholeReconnect false;
+# Available modes: "route" and "firewall"
+:local blackholeMode "firewall"
 
 #
 # URL where to get blocked subnets list
@@ -26,11 +28,6 @@
 :local apiPiece 0
 :local isEnd false
 :local message
-#pass arguments to the function
-:global myLog do={
-    :put "arg a=$a"; :put "arg '1'=$1"} 
-$myLog a="this is arg a value"  "this is arg1 value"
-
 :set message "$listName: Starting..."
 /log info ($message)
 :put $message
@@ -54,12 +51,12 @@ $myLog a="this is arg a value"  "this is arg1 value"
     :local fetchStatus ""
     :local content ""
     :local contentLen 0
-    :local newRouteList [:toarray ""]
-    :local newRouteListCount 0
-    :local routesActive 0
-    :local routesAdded 0
-    :local routesDeleted 0
-    :local routesIgnored 0
+    :local newAddressList [:toarray ""]
+    :local newAddressListCount 0
+    :local addressesActive 0
+    :local addressesAdded 0
+    :local addressesDeleted 0
+    :local addressesIgnored 0
     :local lineEnd 0
     :local line ""
     :local lastEnd 0
@@ -113,42 +110,54 @@ $myLog a="this is arg a value"  "this is arg1 value"
             :local entry [:pick $line 0 ($lineEnd-1)]
             :if ([:pick $line 0 1] != "#") do={
                 :if ([:len $entry] > 0) do={
-                    set newRouteList ($newRouteList, $line) 
-                    set newRouteListCount ($activeRouteCount +1)
+                    set newAddressList ($newAddressList, $line) 
+                    set newAddressListCount ($activeAddressCount +1)
                 }
             } else={
                 :set company [:pick $line 2 ($lineEnd)]
             }
         }
         #
-        # Getting array of active routes
+        # Getting array of active rules
         #
         :set message "$listName: Importing active address list..."
         /log debug ($message)
         :put $message
-        :local activeRouteList [:toarray ""]
-        :local activeRouteCount 0
-        :foreach activeRouteItem in=[/ip route find comment="$listName: $apiPiece $company"] do={
-            set activeRouteList ($activeRouteList, [/ip route get $activeRouteItem dst-address]) 
-            set activeRouteCount ($activeRouteCount +1)
+        :local activeAddressList [:toarray ""]
+        :local activeAddressCount 0
+        if ($blackholeMode = "route") do={
+            :foreach activeAddressItem in=[/ip route find comment="$listName: $apiPiece $company"] do={
+                set activeAddressList ($activeAddressList, [/ip route get $activeAddressItem dst-address]) 
+                set activeAddressCount ($activeAddressCount +1)
+            }
         }
-        #
+        if ($blackholeMode = "firewall") do={
+            :foreach activeAddressItem in=[/ip firewall address-list find list=$listName comment~"$apiPiece $company"] do={
+                set activeAddressList ($activeAddressList, [/ip firewall address-list get $activeAddressItem address]) 
+                set activeAddressCount ($activeAddressCount +1)
+            }
+        }
+        
+        # 
         # God of debugging need more debugging!
         #
-        # :set message "$activeRouteList"
-        # /log debug ($message)
-        # :put $message
-        # :set message "$newRouteList"
-        # /log debug ($message)
-        # :put $message
+        :set message "$activeAddressList"
+        /log debug ($message)
+        :put $message
+        :set message "$newAddressList"
+        /log debug ($message)
+        :put $message
 
         #
-        # Deleting outdated routes
+        # Deleting outdated rules
         #
-        :foreach arli in=$activeRouteList do {
-            set routesActive ($routesActive +1)
+        :foreach arli in=$activeAddressList do {
+            set addressesActive ($addressesActive +1)
             :local exist false
-            :foreach nrli in=$newRouteList do={
+            :foreach nrli in=$newAddressList do={
+                if ([find $arli "/"] <8) do={
+                     :set $arli ("$arli/32")
+                }
                 if ($arli = $nrli) do={
                     set exist true
                 }
@@ -157,50 +166,76 @@ $myLog a="this is arg a value"  "this is arg1 value"
                 :set message "$listName: Outdated rule for $arli. Removing"
                 /log debug ($message)
                 :put $message
-                /ip route remove [/ip route find dst-address=$arli comment="$listName $apiPiece $company"]
-                :set routesDeleted ($routesDeleted + 1)
+                if ($blackholeMode = "route") do={
+                    /ip route remove [/ip route find dst-address=$arli comment="$listName $apiPiece $company"]
+                } 
+                if ($blackholeMode = "firewall") do={
+                    /ip firewall address-list remove [/ip firewall address-list find list=$listName address=$arli comment="$apiPiece $company"]
+                }
+                :set addressesDeleted ($addressesDeleted + 1)
             }
         }
         #
-        # Adding new routes
+        # Adding new rules
         #
-        :foreach nrli in=$newRouteList do {
+        :foreach nrli in=$newAddressList do {
             :local exist false
-            :foreach arli in=$activeRouteList do={
+            :foreach arli in=$activeAddressList do={
+                if ([find $arli "/"] <8) do={
+                     :set $arli ("$arli/32")
+                }
                 if ($arli = $nrli) do={
                     set exist true
                 }
             }
             if (!$exist) do={
                 :local existGlobal false
-                :foreach activeRouteItem in=[/ip route find comment~"$listName"] do={
-                    if ([/ip route get $activeRouteItem dst-address] = $nrli) do={
-                         set existGlobal true
+                if ($blackholeMode = "route") do={
+                    :foreach activeAddressItem in=[/ip route find comment~"$listName"] do={
+                        if ([/ip route get $activeAddressItem dst-address] = $nrli) do={
+                             set existGlobal true
+                        }
                     }
                 }
+                if ($blackholeMode = "firewall") do={
+                    :foreach activeAddressItem in=[/ip firewall address-list find list="$listName"] do={
+                        :local ip [/ip firewall address-list get $activeAddressItem address]
+                        if ([find $ip "/"] <8) do={
+                            :set $ip ("$ip/32")
+                        }
+                        if ($ip = $nrli) do={
+                             set existGlobal true
+                        }
+                    }
+                }    
                 if (!$existGlobal) do={
                     :set message "$listName: New rule found for $nrli"
                     :put $message
                     /log warning ($message)
-                    /ip route add dst-address=$nrli gateway=$blackholeGw comment="$listName: $apiPiece $company" check-gateway=ping
-                    :set routesAdded ($routesAdded + 1)
+                    if ($blackholeMode = "route") do={
+                        /ip route add dst-address=$nrli gateway=$blackholeGw comment="$listName: $apiPiece $company" check-gateway=ping
+                    }
+                    if ($blackholeMode = "firewall") do={
+                        /ip firewall address-list add list=$listName address=$nrli comment="$apiPiece $company"         
+                    }
+                    :set addressesAdded ($addressesAdded + 1)
                 } else={
-                    :set routesIgnored ($routesIgnored + 1)
+                    :set addressesIgnored ($addressesIgnored + 1)
                     :set message "$listName: Rule allready exist for $nrli. Ignored"
                     :put $message
                     /log warning ($message)
                 }
             }
         }
-        :set totalActive ($totalActive + $routesActive)
-        :set totalDeleted ($totalDeleted + $routesDeleted)
-        :set totalAdded ($totalAdded + $routesAdded)
-        :set totalIgnored ($totalIgnored + $routesIgnored)
-        :set message "$listName: Piece $apiPiece: $routesActive active, $routesDeleted deleted, $routesAdded added, $routesIgnored ignored."
+        :set totalActive ($totalActive + $addressesActive)
+        :set totalDeleted ($totalDeleted + $addressesDeleted)
+        :set totalAdded ($totalAdded + $addressesAdded)
+        :set totalIgnored ($totalIgnored + $addressesIgnored)
+        :set message "$listName: Piece $apiPiece: $addressesActive active, $addressesDeleted deleted, $addressesAdded added, $addressesIgnored ignored."
         /log debug ($message)
         :put $message
     }
-    :set apiPiece (apiPiece+1)
+    :set apiPiece ($apiPiece+1)
 } while (!$isEnd)
 :local processed (apiPiece)
 :set message "$listName: Finished. $processed files processed: $totalActive active, $totalDeleted deleted, $totalAdded added, $totalIgnored ignored."
