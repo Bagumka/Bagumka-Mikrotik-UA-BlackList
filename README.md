@@ -1,13 +1,13 @@
 # Mikrotik-UA-BlackList
 
-To redirect traffic to blocked adresses to VPN connection you should write it name to variable VPNgw.
+To redirect traffic to blocked adresses to some interface you should write it name to variable blackholeGw.
 
-     :local VPNgw "pptp-bypass";
+     :local blackholeGw "ether4";
 
 Also, You should have:
  - NAT rule for this interface
  - Set DNS to use ONLY Google DNS servers. Do not use ISP DNS'es
 
-If you want to restart VPN on ecript run, set VPNReconnect variable to 'true'.
+If you want to restart interface on script run, set blackholeGwReconnect variable to 'true'.
 
-    :local VPNReconnect true;
+    :local blackholeGwReconnect true;
