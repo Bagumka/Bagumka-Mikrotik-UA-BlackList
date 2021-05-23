@@ -35,7 +35,7 @@ $myLog a="this is arg a value"  "this is arg1 value"
 /log info ($message)
 :put $message
 :if ($blackholeReconnect) do={
-:set message "$listName: VPN Reconnection set in config."
+:set message "$listName: Interface reconnection set in config."
 /log info ($message)
 :put $message
    /interface disable $blackholeGw;
